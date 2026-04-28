@@ -3,7 +3,9 @@ from pydantic import Field
 
 mcp = FastMCP("DocumentMCP", log_level="ERROR")
 
-
+# -------------------------------
+# In-memory document store
+# -------------------------------
 docs = {
     "deposition.md": "This deposition covers the testimony of Angela Smith, P.E.",
     "report.pdf": "The report details the state of a 20m condenser tower.",
@@ -13,40 +15,102 @@ docs = {
     "spec.txt": "These specifications define the technical requirements for the equipment.",
 }
 
-# tool to read a doc
+
+# =========================================================
+# 🛠 TOOLS
+# =========================================================
+
 @mcp.tool(
     name="read_document",
-    description="Read the contents of the document and returns as a string."
+    description="Read the contents of a document and return as string."
 )
 def read_document(
-    doc_id: str = Field(description="Doc ID of the document to read")
+    doc_id: str = Field(description="Document ID to read")
 ):
     if doc_id not in docs:
         raise ValueError(f"Document with Doc ID {doc_id} not found")
-    
+
     return docs[doc_id]
 
 
-# tool to edit a doc
 @mcp.tool(
     name="edit_document",
-    description="Edit the contents of a Document by replacing a string in the documents content with a new string."
+    description="Replace text in a document with new text."
 )
 def edit_document(
-    doc_id: str = Field(description="Doc ID of the document to edited"),
-    old_strng: str = Field(description="The text to replace. Must match exactly, including whitespaces."),
-    new_strng: str = Field(description="The new text to insert in place of the old text.")
+    doc_id: str = Field(description="Document ID"),
+    old_strng: str = Field(description="Exact text to replace"),
+    new_strng: str = Field(description="New text")
 ):
     if doc_id not in docs:
         raise ValueError(f"Document with Doc ID {doc_id} not found")
-    
+
     docs[doc_id] = docs[doc_id].replace(old_strng, new_strng)
+    return f"Document {doc_id} updated successfully."
 
-# TODO: Write a resource to return all doc id's
-# TODO: Write a resource to return the contents of a particular doc
-# TODO: Write a prompt to rewrite a doc in markdown format
-# TODO: Write a prompt to summarize a doc
 
+# =========================================================
+# 📦 RESOURCES
+# =========================================================
+
+@mcp.resource("docs://documents")
+def list_documents():
+    """
+    Returns list of available document IDs
+    """
+    return list(docs.keys())
+
+
+@mcp.resource("docs://documents/{doc_id}")
+def get_document(doc_id: str):
+    """
+    Returns content of a specific document
+    """
+    if doc_id not in docs:
+        raise ValueError(f"Document with Doc ID {doc_id} not found")
+
+    return docs[doc_id]
+
+
+# =========================================================
+# 🧠 PROMPTS (for CLI slash commands)
+# =========================================================
+
+@mcp.prompt(
+    name="summarize",
+    description="Summarize a document",
+)
+def summarize_prompt(doc_id: str):
+    if doc_id not in docs:
+        raise ValueError(f"Document {doc_id} not found")
+
+    return [
+        {
+            "role": "user",
+            "content": f"Summarize the following document:\n\n{docs[doc_id]}"
+        }
+    ]
+
+
+@mcp.prompt(
+    name="rewrite_markdown",
+    description="Rewrite a document in clean markdown format",
+)
+def rewrite_markdown_prompt(doc_id: str):
+    if doc_id not in docs:
+        raise ValueError(f"Document {doc_id} not found")
+
+    return [
+        {
+            "role": "user",
+            "content": f"Rewrite this into well-structured markdown:\n\n{docs[doc_id]}"
+        }
+    ]
+
+
+# =========================================================
+# 🚀 RUN SERVER
+# =========================================================
 
 if __name__ == "__main__":
     mcp.run(transport="stdio")
